@@ -1,9 +1,8 @@
-import * as cheerio from 'cheerio'; // Correctly import cheerio
+import * as cheerio from 'cheerio';
 import fetch from 'node-fetch';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, update } from 'firebase/database';
 
-// Firebase configuration using environment variables
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
   authDomain: process.env.FIREBASE_AUTH_DOMAIN,
@@ -14,7 +13,6 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
 const firebaseApp = initializeApp(firebaseConfig);
 const database = getDatabase(firebaseApp);
 
@@ -27,7 +25,8 @@ function formatDateToDDMMYYYY(date) {
 // Save advert data to Firebase
 async function saveAdvertData(advertId, advertData) {
   const advertRef = ref(database, `adverts/${advertId}`);
-  const existingAdvert = (await get(advertRef)).val();
+  const existingAdvertSnapshot = await get(advertRef);
+  const existingAdvert = existingAdvertSnapshot.val();
 
   if (!existingAdvert) {
     // New advert detected
@@ -36,26 +35,22 @@ async function saveAdvertData(advertId, advertData) {
     await set(advertRef, advertData);
     console.log(`New advert added: ${advertId}`);
   } else {
-    // Existing advert: Check for price change
+    // Existing advert - Check for price change
     if (existingAdvert.price !== advertData.price) {
       console.log(`Price change detected for advert ID ${advertId}: ${existingAdvert.price} -> ${advertData.price}`);
-      const updatedData = {
-        price: advertData.price,
-      };
       const priceChange = {
         date: formatDateToDDMMYYYY(new Date()),
         price: advertData.price,
       };
       existingAdvert.priceHistory.push(priceChange);
-      updatedData.priceHistory = existingAdvert.priceHistory;
-      await update(advertRef, updatedData);
+      await update(advertRef, { price: advertData.price, priceHistory: existingAdvert.priceHistory });
     } else {
       console.log(`No price change for advert ID ${advertId}`);
     }
   }
 }
 
-// Scrape a single page of adverts
+// Scrape a single page
 async function scrapePage(url) {
   console.log(`Fetching URL: ${url}`);
   try {
@@ -63,26 +58,21 @@ async function scrapePage(url) {
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    const advertContainers = $('.advert-container');
-    if (advertContainers.length === 0) {
-      console.log('No adverts found on the page.');
-      return [];
-    }
-
     const adverts = [];
-    advertContainers.each((_, element) => {
+    $('article.relative.flex').each((_, element) => {
       const container = $(element);
-      const advertUrl = container.find('a').attr('href');
-      const advertId = container.data('id');
-      const advertPrice = container.find('.price').text().trim();
-      const advertLocation = container.find('.location').text().trim();
+
+      const advertUrl = container.find('a').first().attr('href');
+      const advertId = advertUrl ? advertUrl.split('/').pop() : null;
+      const advertTitle = container.find('h2').text().trim();
+      const advertPrice = container.find('h3').first().text().trim();
+      const advertLocation = container.find('span').first().text().trim();
 
       if (!advertUrl || !advertId) {
         console.log('Skipping advert with missing URL or ID.');
         return;
       }
 
-      // Filter out "auctions" and "make-an-offer" adverts
       if (advertUrl.includes('auctions') || advertUrl.includes('make-an-offer')) {
         console.log(`Skipping out-of-scope advert: ${advertUrl}`);
         return;
@@ -91,11 +81,13 @@ async function scrapePage(url) {
       adverts.push({
         id: advertId,
         url: advertUrl,
+        title: advertTitle,
         price: advertPrice,
         location: advertLocation,
       });
     });
 
+    console.log(`Found ${adverts.length} adverts.`);
     return adverts;
   } catch (error) {
     console.error(`Error fetching page: ${error.message}`);
@@ -103,7 +95,7 @@ async function scrapePage(url) {
   }
 }
 
-// Scrape all paginated listings
+// Scrape paginated listings
 async function scrapePaginatedListings(startingUrl) {
   let page = 1;
   let emptyPageCount = 0;
@@ -116,7 +108,7 @@ async function scrapePaginatedListings(startingUrl) {
       emptyPageCount++;
       console.log(`Empty page detected (${emptyPageCount}/3).`);
     } else {
-      emptyPageCount = 0; // Reset empty page count if adverts are found
+      emptyPageCount = 0;
       for (const advert of adverts) {
         await saveAdvertData(advert.id, advert);
       }
@@ -125,13 +117,12 @@ async function scrapePaginatedListings(startingUrl) {
     console.log(`Processed page ${page} with ${adverts.length} adverts.`);
     page++;
     console.log('Waiting 10 seconds before fetching the next page...');
-    await new Promise((resolve) => setTimeout(resolve, 10000)); // Wait 10 seconds between pages
+    await new Promise((resolve) => setTimeout(resolve, 10000));
   }
 
   console.log('Scraping completed.');
 }
 
-// Entry point
 const startingUrl = 'https://www.carandclassic.com/search?listing_type_ex=advert&sort=latest&source=modal-sort';
 console.log('Scraping paginated listings...');
 scrapePaginatedListings(startingUrl).catch((error) => {
