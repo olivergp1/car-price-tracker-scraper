@@ -73,53 +73,61 @@ async function fetchAndInjectUI(advertId, container) {
 }
 
 function injectPriceHistoryUI(container, data) {
-  // Check if the UI is already injected
-  if (container.querySelector(".price-history-ui")) {
-      console.log("Price history UI already exists. Skipping duplicate injection.");
-      return;
-  }
+    // Helper function to format dates as DD/MM/YYYY
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        const day = String(date.getDate()).padStart(2, "0");
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    }
 
-  // Create the price history container
-  const uiContainer = document.createElement("div");
-  uiContainer.classList.add("price-history-ui");
+    // Check if the UI is already injected
+    if (container.querySelector(".price-history-ui")) {
+        console.log("Price history UI already exists. Skipping duplicate injection.");
+        return;
+    }
 
-  // Style the UI container
-  uiContainer.style.display = "block"; // Ensure it's part of the normal flow
-  uiContainer.style.width = "100%"; // Match the width of the container
-  uiContainer.style.marginTop = "10px"; // Add spacing
-  uiContainer.style.padding = "5px"; // Optional: Add padding for separation
-  uiContainer.style.boxSizing = "border-box"; // Avoid size misalignment
-  uiContainer.style.fontSize = "0.9em"; // Match font size
-  uiContainer.style.color = "#333"; // Match text color
-  uiContainer.style.backgroundColor = "transparent"; // No background
+    // Create the price history container
+    const uiContainer = document.createElement("div");
+    uiContainer.classList.add("price-history-ui");
 
-  // Build the price history content
-  const advertisedDate = data.advertisedDate || "Unknown Date";
-  const priceHistory = data.priceHistory || [];
-  let historyHTML = `<div><strong>Advertised:</strong> ${advertisedDate}</div>`;
+    // Style the UI container
+    uiContainer.style.display = "block"; // Ensure it's part of the normal flow
+    uiContainer.style.width = "100%"; // Match the width of the container
+    uiContainer.style.marginTop = "10px"; // Add spacing
+    uiContainer.style.padding = "5px"; // Optional: Add padding for separation
+    uiContainer.style.boxSizing = "border-box"; // Avoid size misalignment
+    uiContainer.style.fontSize = "0.9em"; // Match font size
+    uiContainer.style.color = "#333"; // Match text color
+    uiContainer.style.backgroundColor = "transparent"; // No background
 
-  if (priceHistory.length > 0) {
-      historyHTML += "<div><strong>Price History:</strong></div>";
-      priceHistory.forEach((entry) => {
-          historyHTML += `<div style="margin-left: 15px;">${entry.date}: ${entry.price}</div>`;
-      });
-  } else {
-      historyHTML += "<div><strong>Price History:</strong> No price changes recorded.</div>";
-  }
+    // Build the price history content
+    const advertisedDate = data.advertisedDate ? formatDate(data.advertisedDate) : "Unknown Date";
+    const priceHistory = data.priceHistory || [];
+    let historyHTML = `<div><strong>Advertised:</strong> ${advertisedDate}</div>`;
 
-  // Set the content
-  uiContainer.innerHTML = historyHTML;
+    if (priceHistory.length > 0) {
+        historyHTML += "<div><strong>Price History:</strong></div>";
+        priceHistory.forEach((entry) => {
+            historyHTML += `<div style="margin-left: 15px;">${formatDate(entry.date)}: ${entry.price}</div>`;
+        });
+    } else {
+        historyHTML += "<div><strong>Price History:</strong> No price changes recorded.</div>";
+    }
 
-  // Append the UI container to the end of the advert container
-  const targetParent = container.querySelector("div.flex.flex-grow.flex-col.justify-between.gap-2.p-2");
-  if (targetParent) {
-      targetParent.appendChild(uiContainer);
-      console.log("Injected price history UI at the bottom of the advert content area.");
-  } else {
-      console.warn("Target parent for price history UI not found. Skipping injection.");
-  }
+    // Set the content
+    uiContainer.innerHTML = historyHTML;
+
+    // Append the UI container to the end of the advert container
+    const targetParent = container.querySelector("div.flex.flex-grow.flex-col.justify-between.gap-2.p-2");
+    if (targetParent) {
+        targetParent.appendChild(uiContainer);
+        console.log("Injected price history UI at the bottom of the advert content area.");
+    } else {
+        console.warn("Target parent for price history UI not found. Skipping injection.");
+    }
 }
-
 
 function initializeObserver() {
     const targetNode = document.body;
