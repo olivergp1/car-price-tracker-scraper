@@ -1,0 +1,33 @@
+{
+    "manifest_version": 3,
+    "name": "CarAndClassic Price Tracker",
+    "version": "1.0",
+    "permissions": ["storage", "activeTab"],
+    "host_permissions": [
+      "https://www.carandclassic.com/*",
+      "https://*.firebaseio.com/*",
+      "https://www.googleapis.com/*"
+    ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "web_accessible_resources": [
+      {
+        "resources": [
+          "libs/firebase-app.js",
+          "libs/firebase-database.js"
+        ],
+        "matches": ["*://*.carandclassic.com/*"]
+      }
+    ],
+    "content_scripts": [
+      {
+        "matches": ["*://*.carandclassic.com/*"],
+        "js": ["content.js"]
+      }
+    ],
+    "action": {
+      "default_title": "CarAndClassic Price Tracker"
+    }
+  }
+  

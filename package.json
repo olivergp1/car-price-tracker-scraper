@@ -1,0 +1,19 @@
+{
+  "name": "car-price-tracker-scraper",
+  "version": "1.0.0",
+  "description": "A scraper for Car and Classic classified adverts to track price changes.",
+  "main": "scraper.js",
+  "scripts": {
+    "start": "node scraper.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "firebase": "^11.0.2",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "author": "olivergp1",
+  "license": "ISC"
+}
