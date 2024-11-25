@@ -1,10 +1,9 @@
-import fetch from 'node-fetch';
-import cheerio from 'cheerio';
-import admin from 'firebase-admin';
-import { readFileSync } from 'fs';
+const cheerio = require('cheerio');
+const fetch = require('node-fetch');
+const admin = require('firebase-admin');
 
-// Firebase setup
-const serviceAccount = JSON.parse(readFileSync('./serviceAccountKey.json', 'utf8'));
+// Firebase initialization
+const serviceAccount = require('./serviceAccountKey.json');
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -14,83 +13,89 @@ if (!admin.apps.length) {
 }
 
 const db = admin.database();
-const baseUrl = 'https://www.carandclassic.com/search?listing_type_ex=advert&sort=latest&source=modal-sort';
 
-async function scrapePaginatedListings() {
+async function scrapePaginatedListings(startingUrl) {
   let page = 1;
-  let emptyPageCount = 0;
+  let consecutiveEmptyPages = 0;
 
-  while (emptyPageCount < 3) {
-    const url = `${baseUrl}&page=${page}`;
+  while (consecutiveEmptyPages < 3) {
+    const url = `${startingUrl}&page=${page}`;
     console.log(`Fetching URL: ${url}`);
-
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { timeout: 30000 });
       const html = await response.text();
       const $ = cheerio.load(html);
 
       const adverts = [];
-      $('article.relative.flex').each((_, element) => {
-        const advertUrl = $(element).find('a').attr('href');
-        if (!advertUrl || advertUrl.includes('auctions') || advertUrl.includes('make-an-offer')) return;
-
-        const advertId = advertUrl.split('/').pop();
-        const title = $(element).find('h2').text().trim();
-        const price = $(element).find('h3').text().trim();
-        const location = $(element).find('span.text-xs.font-semibold').text().trim();
-
-        adverts.push({ advertId, title, price, location });
+      $('article a').each((_, element) => {
+        const advertUrl = $(element).attr('href');
+        if (advertUrl && !advertUrl.includes('auctions') && !advertUrl.includes('make-an-offer')) {
+          const advertId = advertUrl.split('/').pop();
+          const price = $(element).find('h3').text().trim();
+          const location = $(element).find('span').text().trim();
+          adverts.push({ advertId, advertUrl, price, location });
+        }
       });
 
       if (adverts.length === 0) {
-        console.log('No adverts found on the page.');
-        emptyPageCount++;
+        console.log(`No adverts found on the page. Empty page detected (${consecutiveEmptyPages + 1}/3).`);
+        consecutiveEmptyPages++;
       } else {
-        emptyPageCount = 0;
         console.log(`Found ${adverts.length} adverts.`);
-        for (const advert of adverts) {
-          await saveAdvertData(advert);
-        }
+        consecutiveEmptyPages = 0; // Reset empty pages counter
+        await processAdverts(adverts);
       }
 
-      console.log(`Processed page ${page} with ${adverts.length} adverts.`);
       page++;
-      await new Promise((resolve) => setTimeout(resolve, 10000)); // Wait 10 seconds between pages
+      console.log('Waiting 10 seconds before fetching the next page...');
+      await new Promise((resolve) => setTimeout(resolve, 10000));
     } catch (error) {
-      console.error(`Error fetching page ${page}:`, error);
-      break;
+      console.error(`Error fetching page ${page}:`, error.message);
+      consecutiveEmptyPages++;
     }
   }
 
   console.log('Scraping completed.');
 }
 
-async function saveAdvertData(advert) {
-  const advertRef = db.ref(`/adverts/${advert.advertId}`);
-  const snapshot = await advertRef.once('value');
-  const existingAdvert = snapshot.val();
+async function processAdverts(adverts) {
+  for (const advert of adverts) {
+    const advertRef = db.ref(`adverts/${advert.advertId}`);
+    const snapshot = await advertRef.once('value');
+    const existingData = snapshot.val();
 
-  if (existingAdvert) {
-    if (existingAdvert.price !== advert.price) {
-      console.log(`Price change detected for advert ID ${advert.advertId}: ${existingAdvert.price} -> ${advert.price}`);
-      const priceHistory = existingAdvert.priceHistory || [];
-      priceHistory.push({
-        date: new Date().toLocaleDateString('en-GB'), // DD/MM/YYYY format
-        price: advert.price,
-      });
-      await advertRef.update({ price: advert.price, priceHistory });
+    if (existingData) {
+      if (existingData.price !== advert.price) {
+        console.log(`Price change detected for advert ID ${advert.advertId}: ${existingData.price} -> ${advert.price}`);
+        if (!existingData.priceHistory) {
+          existingData.priceHistory = [];
+        }
+        existingData.priceHistory.push({
+          price: advert.price,
+          date: new Date().toISOString(),
+        });
+
+        await advertRef.update({
+          price: advert.price,
+          priceHistory: existingData.priceHistory,
+        });
+      } else {
+        console.log(`No price change for advert ID ${advert.advertId}`);
+      }
     } else {
-      console.log(`No price change for advert ID ${advert.advertId}`);
+      console.log(`New advert added: ${advert.advertId}`);
+      await advertRef.set({
+        advertId: advert.advertId,
+        url: advert.advertUrl,
+        price: advert.price,
+        location: advert.location,
+        advertisedDate: new Date().toISOString(),
+        priceHistory: [],
+      });
     }
-  } else {
-    console.log(`New advert added: ${advert.advertId}`);
-    const advertisedDate = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY format
-    await advertRef.set({
-      ...advert,
-      advertisedDate,
-      priceHistory: [{ date: advertisedDate, price: advert.price }],
-    });
   }
 }
 
-scrapePaginatedListings();
+// Start the scraper
+const startingUrl = 'https://www.carandclassic.com/search?listing_type_ex=advert&sort=latest&source=modal-sort';
+scrapePaginatedListings(startingUrl);
