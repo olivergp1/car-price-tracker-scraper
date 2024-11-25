@@ -1,91 +1,53 @@
-const firebase = require("firebase/app");
-require("firebase/database");
+// Import Firebase modules
+const { initializeApp } = require('firebase/app');
+const { getDatabase, ref, set } = require('firebase/database');
 
 // Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyAz75LbtmfhQWsjNCvBxmLZJpHBhs29fNo",
-  authDomain: "car-price-tracker-e0a6b.firebaseapp.com",
-  databaseURL: "https://car-price-tracker-e0a6b-default-rtdb.firebaseio.com",
-  projectId: "car-price-tracker-e0a6b",
-  storageBucket: "car-price-tracker-e0a6b.firebasestorage.app",
-  messagingSenderId: "1016805259851",
-  appId: "1:1016805259851:web:bc346c97d57524e868abce",
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.FIREBASE_DATABASE_URL,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
+// Initialize Firebase app
+const app = initializeApp(firebaseConfig);
 
-/**
- * Scrapes paginated listings from CarAndClassic.
- * @param {string} startUrl The starting URL for the scraper.
- */
-async function scrapePaginatedListings(startUrl) {
-    console.log(`Starting scraper at ${startUrl}...`);
+// Initialize Realtime Database
+const database = getDatabase(app);
 
-    let nextUrl = startUrl;
-    let emptyPages = 0;
-
-    while (nextUrl && emptyPages < 3) {
-        console.log(`Scraping page: ${nextUrl}`);
-
-        try {
-            // Use fetch to get the page data
-            const response = await fetch(nextUrl);
-            const html = await response.text();
-
-            // Use a library like jsdom or cheerio to parse the HTML
-            const cheerio = require("cheerio");
-            const $ = cheerio.load(html);
-
-            // Find advert containers and extract data
-            const adverts = $("article.relative.flex");
-            if (adverts.length === 0) {
-                emptyPages++;
-                console.log(`No adverts found on page. Empty pages count: ${emptyPages}`);
-            } else {
-                emptyPages = 0; // Reset empty pages count
-            }
-
-            adverts.each((index, advert) => {
-                const advertId = $(advert).find("a[href]").attr("href").split("/").pop();
-                const title = $(advert).find("h2").text().trim();
-                const price = $(advert).find("h3").text().trim();
-                const location = $(advert).find(".text-xs").text().trim();
-
-                console.log(`Advert found: ID=${advertId}, Title=${title}, Price=${price}, Location=${location}`);
-
-                // Save advert data to Firebase
-                database.ref(`/adverts/${advertId}`).set({
-                    title,
-                    price,
-                    location,
-                    advertisedDate: new Date().toISOString(),
-                });
-            });
-
-            // Get the next page URL
-            const nextPageLink = $("a.next-page"); // Update selector as needed
-            nextUrl = nextPageLink.length > 0 ? nextPageLink.attr("href") : null;
-
-        } catch (error) {
-            console.error(`Error scraping page ${nextUrl}:`, error);
-            break;
-        }
-    }
-
-    console.log("Scraper finished.");
+// Example of saving advert data to Firebase
+async function saveAdvertData(advertId, advertData) {
+  const advertRef = ref(database, `adverts/${advertId}`);
+  await set(advertRef, advertData);
+  console.log(`Saved advert ID ${advertId} to Firebase.`);
 }
 
-/**
- * Main entry point for the scraper.
- */
-async function main() {
-    const startUrl = "https://www.carandclassic.com/search?listing_type_ex=advert&page=1&sort=latest&source=modal-sort";
-    await scrapePaginatedListings(startUrl);
+// Example scraping logic
+async function scrapePaginatedListings() {
+  console.log("Scraping paginated listings...");
+  // Example advert data
+  const advertData = {
+    title: "Example Title",
+    price: "£5,000",
+    location: "Example Location",
+    advertisedDate: new Date().toISOString(),
+  };
+
+  // Save the advert data to Firebase
+  await saveAdvertData("example-id", advertData);
 }
 
-// Run the script if executed directly
-if (require.main === module) {
-    main();
-}
+// Main execution
+scrapePaginatedListings()
+  .then(() => {
+    console.log("Scraper completed successfully.");
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error("Scraper encountered an error:", error);
+    process.exit(1);
+  });

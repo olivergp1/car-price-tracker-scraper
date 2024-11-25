@@ -7,12 +7,12 @@
     "start": "node scraper.js"
   },
   "dependencies": {
-    "cheerio": "^1.0.0",
     "firebase": "^11.0.2",
-    "node-fetch": "^3.3.2"
+    "cheerio": "^1.0.0-rc.12",
+    "node-fetch": "^3.3.1"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": "18.x"
   },
   "author": "olivergp1",
   "license": "ISC"
