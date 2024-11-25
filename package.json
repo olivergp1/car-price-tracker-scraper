@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A scraper for Car and Classic classified adverts to track price changes.",
   "main": "scraper.js",
+  "type": "module",
   "scripts": {
     "start": "node scraper.js"
   },

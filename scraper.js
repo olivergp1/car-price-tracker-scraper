@@ -1,7 +1,7 @@
-const fetch = require('node-fetch');
-const cheerio = require('cheerio');
-const { initializeApp } = require('firebase/app');
-const { getDatabase, ref, set } = require('firebase/database');
+import fetch from 'node-fetch';
+import cheerio from 'cheerio';
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, set } from 'firebase/database';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -18,6 +18,20 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
+// Helper function to fetch with a timeout
+async function fetchWithTimeout(url, timeout = 30000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw new Error(`Fetch request to ${url} timed out or failed: ${error.message}`);
+  }
+}
+
 // Function to save advert data to Firebase
 async function saveAdvertData(advertId, advertData) {
   const advertRef = ref(database, `adverts/${advertId}`);
@@ -28,12 +42,11 @@ async function saveAdvertData(advertId, advertData) {
 // Function to scrape a single page
 async function scrapePage(url) {
   console.log(`Fetching URL: ${url}`);
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url, 30000); // Allow up to 30 seconds for the page to load
   const html = await response.text();
   const $ = cheerio.load(html);
 
   const adverts = [];
-
   $('.relative.flex').each((index, element) => {
     const id = $(element).find('a').attr('href').split('/car/')[1];
     const title = $(element).find('h2').text().trim();
@@ -54,29 +67,44 @@ async function scrapePage(url) {
   return adverts;
 }
 
-// Function to scrape all paginated listings
+// Function to scrape paginated listings
 async function scrapePaginatedListings() {
   console.log('Scraping paginated listings...');
+  const startingUrl = `https://www.carandclassic.com/search?listing_type_ex=advert&page=1&sort=latest&source=modal-sort`;
   let page = 1;
-  let hasMorePages = true;
+  let consecutiveEmptyPages = 0;
+  let reloadAttempts = 0;
 
-  while (hasMorePages) {
+  while (consecutiveEmptyPages < 3 && reloadAttempts < 3) {
     const url = `https://www.carandclassic.com/search?listing_type_ex=advert&page=${page}&sort=latest&source=modal-sort`;
-    const adverts = await scrapePage(url);
 
-    if (adverts.length === 0) {
-      console.log(`No adverts found on page ${page}. Stopping pagination.`);
-      hasMorePages = false;
-    } else {
-      for (const advert of adverts) {
-        await saveAdvertData(advert.id, advert);
+    try {
+      const adverts = await scrapePage(url);
+
+      if (adverts.length === 0) {
+        console.log(`No adverts found on page ${page}.`);
+        consecutiveEmptyPages++;
+      } else {
+        consecutiveEmptyPages = 0; // Reset the counter if adverts are found
+        for (const advert of adverts) {
+          await saveAdvertData(advert.id, advert);
+        }
+        console.log(`Processed page ${page} with ${adverts.length} adverts.`);
       }
-      console.log(`Processed page ${page} with ${adverts.length} adverts.`);
-      page += 1;
+
+      page++;
+      reloadAttempts = 0; // Reset reload attempts on successful processing
+    } catch (error) {
+      console.error(`Error fetching page ${page}:`, error);
+      reloadAttempts++;
+      if (reloadAttempts >= 3) {
+        console.error('Maximum reload attempts reached. Stopping scraper.');
+      }
     }
 
     // Add delay between page requests to avoid overloading the server
-    await new Promise((resolve) => setTimeout(resolve, 10000));
+    console.log('Waiting 10 seconds before fetching the next page...');
+    await new Promise((resolve) => setTimeout(resolve, 10000)); // 10-second delay
   }
 
   console.log('Scraping completed.');
