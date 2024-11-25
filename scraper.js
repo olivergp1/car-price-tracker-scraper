@@ -48,7 +48,13 @@ async function scrapePage(url) {
 
   const adverts = [];
   $('.relative.flex').each((index, element) => {
-    const id = $(element).find('a').attr('href').split('/car/')[1];
+    const href = $(element).find('a').attr('href');
+    if (!href || href.includes('auctions') || href.includes('make-an-offer')) {
+      console.warn(`Skipping advert with URL: ${href}`);
+      return; // Skip out-of-scope adverts
+    }
+
+    const id = href.split('/car/')[1];
     const title = $(element).find('h2').text().trim();
     const price = $(element).find('h3').text().trim();
     const location = $(element).find('.text-xs.font-semibold.leading-4').text().trim();
@@ -70,37 +76,43 @@ async function scrapePage(url) {
 // Function to scrape paginated listings
 async function scrapePaginatedListings() {
   console.log('Scraping paginated listings...');
-  const startingUrl = `https://www.carandclassic.com/search?listing_type_ex=advert&page=1&sort=latest&source=modal-sort`;
+  const baseUrl = `https://www.carandclassic.com/search?listing_type_ex=advert&sort=latest&source=modal-sort`;
   let page = 1;
   let consecutiveEmptyPages = 0;
-  let reloadAttempts = 0;
 
-  while (consecutiveEmptyPages < 3 && reloadAttempts < 3) {
-    const url = `https://www.carandclassic.com/search?listing_type_ex=advert&page=${page}&sort=latest&source=modal-sort`;
+  while (consecutiveEmptyPages < 3) {
+    const url = `${baseUrl}&page=${page}`;
+    let reloadAttempts = 0;
+    let adverts = [];
 
-    try {
-      const adverts = await scrapePage(url);
+    while (reloadAttempts < 3) {
+      try {
+        adverts = await scrapePage(url);
 
-      if (adverts.length === 0) {
-        console.log(`No adverts found on page ${page}.`);
-        consecutiveEmptyPages++;
-      } else {
-        consecutiveEmptyPages = 0; // Reset the counter if adverts are found
-        for (const advert of adverts) {
-          await saveAdvertData(advert.id, advert);
+        if (adverts.length > 0) {
+          break; // Stop reloading if adverts are found
         }
-        console.log(`Processed page ${page} with ${adverts.length} adverts.`);
-      }
 
-      page++;
-      reloadAttempts = 0; // Reset reload attempts on successful processing
-    } catch (error) {
-      console.error(`Error fetching page ${page}:`, error);
-      reloadAttempts++;
-      if (reloadAttempts >= 3) {
-        console.error('Maximum reload attempts reached. Stopping scraper.');
+        console.log(`No adverts found on page ${page}. Retrying (${reloadAttempts + 1}/3)...`);
+        reloadAttempts++;
+      } catch (error) {
+        console.error(`Error fetching page ${page}:`, error);
+        reloadAttempts++;
       }
     }
+
+    if (adverts.length === 0) {
+      console.log(`No adverts found on page ${page} after 3 attempts. Moving to next page.`);
+      consecutiveEmptyPages++;
+    } else {
+      consecutiveEmptyPages = 0; // Reset counter if adverts are found
+      for (const advert of adverts) {
+        await saveAdvertData(advert.id, advert);
+      }
+      console.log(`Processed page ${page} with ${adverts.length} adverts.`);
+    }
+
+    page++; // Move to the next page
 
     // Add delay between page requests to avoid overloading the server
     console.log('Waiting 10 seconds before fetching the next page...');
