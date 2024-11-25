@@ -1,4 +1,4 @@
-import cheerio from 'cheerio'; // Fix import for Cheerio
+import * as cheerio from 'cheerio'; // Correctly import cheerio
 import fetch from 'node-fetch';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, update } from 'firebase/database';
