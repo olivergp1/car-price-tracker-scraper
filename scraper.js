@@ -26,8 +26,9 @@ async function scrapePaginatedListings() {
     const html = await response.text();
     const $ = cheerio.load(html);
 
+    // Detect advert containers and filter out ineligible adverts
     const adverts = [];
-    $(".relative.flex").each((_, element) => {
+    $("article.relative.flex").each((_, element) => {
       const advertURL = $(element).find("a").attr("href");
       if (advertURL && !advertURL.includes("auctions") && !advertURL.includes("make-an-offer")) {
         const id = advertURL.split("/").pop();
@@ -39,11 +40,14 @@ async function scrapePaginatedListings() {
       }
     });
 
-    if (adverts.length === 0) {
+    // Output the correct number of in-scope adverts
+    const inScopeAdvertsCount = adverts.length;
+
+    if (inScopeAdvertsCount === 0) {
       console.log(`No adverts found on page ${page}. Empty page count: ${emptyPageCount + 1}/3.`);
       emptyPageCount++;
     } else {
-      console.log(`Found ${adverts.length} adverts on page ${page}.`);
+      console.log(`Found ${inScopeAdvertsCount} adverts on page ${page}.`);
       emptyPageCount = 0;
 
       for (const advert of adverts) {
@@ -65,9 +69,12 @@ async function scrapePaginatedListings() {
           const existingAdvert = snapshot.val();
           if (existingAdvert.price !== advert.price) {
             console.log(`Price change detected for advert ID ${advert.id}: ${existingAdvert.price} -> ${advert.price}`);
+            const updatedPriceHistory = existingAdvert.priceHistory || [];
+            updatedPriceHistory.push({ date: new Date().toISOString(), price: advert.price });
+
             await advertRef.update({
               price: advert.price,
-              [`priceHistory`]: admin.database.ServerValue.increment([{ date: new Date().toISOString(), price: advert.price }]),
+              priceHistory: updatedPriceHistory,
             });
           }
         }
