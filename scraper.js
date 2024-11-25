@@ -1,148 +1,141 @@
 import fetch from 'node-fetch';
-import * as cheerio from 'cheerio';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set } from 'firebase/database';
+import { getDatabase, ref, get, set, update } from 'firebase/database';
+import cheerio from 'cheerio';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  databaseURL: process.env.FIREBASE_DATABASE_URL,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID,
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  databaseURL: "YOUR_DATABASE_URL",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID",
 };
 
-// Initialize Firebase app
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
+// Initialize Firebase
+const firebaseApp = initializeApp(firebaseConfig);
+const database = getDatabase(firebaseApp);
 
-// Helper function to fetch with a timeout
-async function fetchWithTimeout(url, timeout = 30000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw new Error(`Fetch request to ${url} timed out or failed: ${error.message}`);
+// Format date to DD/MM/YYYY
+function formatDateToDDMMYYYY(date) {
+  const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
+  return new Date(date).toLocaleDateString('en-GB', options); // en-GB for DD/MM/YYYY
+}
+
+// Save advert data to Firebase
+async function saveAdvertData(advertId, advertData) {
+  const advertRef = ref(database, `adverts/${advertId}`);
+  const existingAdvert = (await get(advertRef)).val();
+
+  if (!existingAdvert) {
+    // If the advert doesn't exist in Firebase, add it
+    advertData.advertisedDate = formatDateToDDMMYYYY(new Date()); // Set advertisedDate with formatted date
+    advertData.priceHistory = []; // Initialize priceHistory as an empty array
+    await set(advertRef, advertData);
+    console.log(`New advert added: ${advertId}`);
+  } else {
+    // If the advert exists, check for price changes
+    if (existingAdvert.price !== advertData.price) {
+      console.log(`Price change detected for advert ID ${advertId}: ${existingAdvert.price} -> ${advertData.price}`);
+      // Update the current price
+      const updatedData = {
+        price: advertData.price,
+      };
+      // Add the price change to priceHistory
+      const priceChange = {
+        date: formatDateToDDMMYYYY(new Date()), // Format to DD/MM/YYYY
+        price: advertData.price,
+      };
+      existingAdvert.priceHistory.push(priceChange);
+      updatedData.priceHistory = existingAdvert.priceHistory;
+      await update(advertRef, updatedData);
+    } else {
+      console.log(`No price change for advert ID ${advertId}`);
+    }
   }
 }
 
-// Function to save advert data to Firebase
-async function saveAdvertData(advertId, advertData) {
-  const advertRef = ref(database, `adverts/${advertId}`);
-  await set(advertRef, advertData);
-  console.log(`Saved advert ID ${advertId} to Firebase.`);
-}
-
-// Function to scrape a single page
+// Scrape a single page of adverts
 async function scrapePage(url) {
   console.log(`Fetching URL: ${url}`);
-  const response = await fetchWithTimeout(url, 30000); // Allow up to 30 seconds for the page to load
-  const html = await response.text();
-  const $ = cheerio.load(html);
+  try {
+    const response = await fetch(url);
+    const html = await response.text();
+    const $ = cheerio.load(html);
 
-  const adverts = [];
-  const seenAdverts = new Set();
-
-  $('.relative.flex').each((index, element) => {
-    const link = $(element).find('a').attr('href');
-    if (!link || typeof link !== 'string') {
-      console.warn(`Skipping advert with missing or invalid URL`);
-      return; // Skip if URL is missing or invalid
+    const advertContainers = $('.advert-container');
+    if (advertContainers.length === 0) {
+      console.log('No adverts found on the page.');
+      return [];
     }
 
-    // Exclude adverts with "auctions" or "make-an-offer" in the URL
-    if (link.includes('auctions') || link.includes('make-an-offer')) {
-      console.warn(`Skipping advert with URL: ${link}`);
-      return;
-    }
+    const adverts = [];
+    advertContainers.each((_, element) => {
+      const container = $(element);
+      const advertUrl = container.find('a').attr('href');
+      const advertId = container.data('id');
+      const advertPrice = container.find('.price').text().trim();
+      const advertLocation = container.find('.location').text().trim();
 
-    const idMatch = link.match(/\/car\/([a-zA-Z0-9]+)/);
-    if (!idMatch || !idMatch[1] || seenAdverts.has(idMatch[1])) {
-      console.warn(`Skipping advert with ID: ${idMatch ? idMatch[1] : 'undefined'} (already processed or invalid)`);
-      return; // Skip if no valid ID or already processed advert
-    }
+      if (!advertUrl || !advertId) {
+        console.log('Skipping advert with missing URL or ID.');
+        return;
+      }
 
-    const id = idMatch[1];
-    seenAdverts.add(id); // Add the advert ID to the set to avoid reprocessing
+      // Filter out "auctions" and "make-an-offer" adverts
+      if (advertUrl.includes('auctions') || advertUrl.includes('make-an-offer')) {
+        console.log(`Skipping out-of-scope advert: ${advertUrl}`);
+        return;
+      }
 
-    const title = $(element).find('h2').text().trim();
-    const price = $(element).find('h3').text().trim();
-    const location = $(element).find('.text-xs.font-semibold.leading-4').text().trim();
-
-    adverts.push({
-      id,
-      title,
-      price,
-      location,
-      advertisedDate: new Date().toISOString(),
+      adverts.push({
+        id: advertId,
+        url: advertUrl,
+        price: advertPrice,
+        location: advertLocation,
+      });
     });
-  });
 
-  return adverts;
+    return adverts;
+  } catch (error) {
+    console.error(`Error fetching page: ${error.message}`);
+    return [];
+  }
 }
 
-// Function to scrape paginated listings
-async function scrapePaginatedListings() {
-  console.log('Scraping paginated listings...');
-  const baseUrl = `https://www.carandclassic.com/search?listing_type_ex=advert&sort=latest&source=modal-sort`;
+// Scrape all paginated listings
+async function scrapePaginatedListings(startingUrl) {
   let page = 1;
-  let consecutiveEmptyPages = 0;
+  let emptyPageCount = 0;
 
-  while (consecutiveEmptyPages < 3) {
-    const url = `${baseUrl}&page=${page}`;
-    let reloadAttempts = 0;
-    let adverts = [];
-
-    while (reloadAttempts < 3) {
-      try {
-        adverts = await scrapePage(url);
-
-        if (adverts.length > 0) {
-          break; // Stop reloading if adverts are found
-        }
-
-        console.log(`No adverts found on page ${page}. Retrying (${reloadAttempts + 1}/3)...`);
-        reloadAttempts++;
-      } catch (error) {
-        console.error(`Error fetching page ${page}:`, error);
-        reloadAttempts++;
-      }
-    }
+  while (emptyPageCount < 3) {
+    const url = `${startingUrl}&page=${page}`;
+    const adverts = await scrapePage(url);
 
     if (adverts.length === 0) {
-      console.log(`No adverts found on page ${page} after 3 attempts. Moving to next page.`);
-      consecutiveEmptyPages++;
+      emptyPageCount++;
+      console.log(`Empty page detected (${emptyPageCount}/3).`);
     } else {
-      consecutiveEmptyPages = 0; // Reset counter if adverts are found
+      emptyPageCount = 0; // Reset empty page count if adverts are found
       for (const advert of adverts) {
         await saveAdvertData(advert.id, advert);
       }
-      console.log(`Processed page ${page} with ${adverts.length} adverts.`);
     }
 
-    page++; // Move to the next page
-
-    // Add delay between page requests to avoid overloading the server
+    console.log(`Processed page ${page} with ${adverts.length} adverts.`);
+    page++;
     console.log('Waiting 10 seconds before fetching the next page...');
-    await new Promise((resolve) => setTimeout(resolve, 10000)); // 10-second delay
+    await new Promise((resolve) => setTimeout(resolve, 10000)); // Wait 10 seconds between pages
   }
 
   console.log('Scraping completed.');
 }
 
-// Main execution
-scrapePaginatedListings()
-  .then(() => {
-    console.log('Scraper completed successfully.');
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error('Scraper encountered an error:', error);
-    process.exit(1);
-  });
+// Entry point
+const startingUrl = 'https://www.carandclassic.com/search?listing_type_ex=advert&sort=latest&source=modal-sort';
+console.log('Scraping paginated listings...');
+scrapePaginatedListings(startingUrl).catch((error) => {
+  console.error('Error during scraping:', error);
+});
