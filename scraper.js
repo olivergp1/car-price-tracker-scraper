@@ -47,27 +47,40 @@ async function scrapePage(url) {
   const $ = cheerio.load(html);
 
   const adverts = [];
+  const seenAdverts = new Set();
+
   $('.relative.flex').each((index, element) => {
     const href = $(element).find('a').attr('href');
-    if (!href || href.includes('auctions') || href.includes('make-an-offer')) {
+    if (!href) {
+      console.warn(`Skipping advert with missing URL`);
+      return; // Skip if URL is missing
+    }
+
+    // Exclude adverts with "auctions" or "make-an-offer" in the URL
+    if (href.includes('auctions') || href.includes('make-an-offer')) {
       console.warn(`Skipping advert with URL: ${href}`);
-      return; // Skip out-of-scope adverts
+      return;
     }
 
     const id = href.split('/car/')[1];
+    if (!id || seenAdverts.has(id)) {
+      console.warn(`Skipping advert with ID: ${id} (already processed or invalid)`);
+      return; // Skip if no valid ID or already processed advert
+    }
+
+    seenAdverts.add(id); // Add the advert ID to the set to avoid reprocessing
+
     const title = $(element).find('h2').text().trim();
     const price = $(element).find('h3').text().trim();
     const location = $(element).find('.text-xs.font-semibold.leading-4').text().trim();
 
-    if (id) {
-      adverts.push({
-        id,
-        title,
-        price,
-        location,
-        advertisedDate: new Date().toISOString(),
-      });
-    }
+    adverts.push({
+      id,
+      title,
+      price,
+      location,
+      advertisedDate: new Date().toISOString(),
+    });
   });
 
   return adverts;
