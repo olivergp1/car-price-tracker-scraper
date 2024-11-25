@@ -1,10 +1,9 @@
-const cheerio = require('cheerio');
-const fetch = require('node-fetch');
-const admin = require('firebase-admin');
+import cheerio from 'cheerio';
+import fetch from 'node-fetch';
+import admin from 'firebase-admin';
+import serviceAccount from './serviceAccountKey.json' assert { type: 'json' };
 
 // Firebase initialization
-const serviceAccount = require('./serviceAccountKey.json');
-
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
