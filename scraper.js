@@ -1,17 +1,17 @@
+import cheerio from 'cheerio'; // Fix import for Cheerio
 import fetch from 'node-fetch';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, update } from 'firebase/database';
-import cheerio from 'cheerio';
 
-// Firebase configuration
+// Firebase configuration using environment variables
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  databaseURL: "YOUR_DATABASE_URL",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.FIREBASE_DATABASE_URL,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID,
 };
 
 // Initialize Firebase
@@ -21,7 +21,7 @@ const database = getDatabase(firebaseApp);
 // Format date to DD/MM/YYYY
 function formatDateToDDMMYYYY(date) {
   const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
-  return new Date(date).toLocaleDateString('en-GB', options); // en-GB for DD/MM/YYYY
+  return new Date(date).toLocaleDateString('en-GB', options);
 }
 
 // Save advert data to Firebase
@@ -30,22 +30,20 @@ async function saveAdvertData(advertId, advertData) {
   const existingAdvert = (await get(advertRef)).val();
 
   if (!existingAdvert) {
-    // If the advert doesn't exist in Firebase, add it
-    advertData.advertisedDate = formatDateToDDMMYYYY(new Date()); // Set advertisedDate with formatted date
-    advertData.priceHistory = []; // Initialize priceHistory as an empty array
+    // New advert detected
+    advertData.advertisedDate = formatDateToDDMMYYYY(new Date());
+    advertData.priceHistory = [];
     await set(advertRef, advertData);
     console.log(`New advert added: ${advertId}`);
   } else {
-    // If the advert exists, check for price changes
+    // Existing advert: Check for price change
     if (existingAdvert.price !== advertData.price) {
       console.log(`Price change detected for advert ID ${advertId}: ${existingAdvert.price} -> ${advertData.price}`);
-      // Update the current price
       const updatedData = {
         price: advertData.price,
       };
-      // Add the price change to priceHistory
       const priceChange = {
-        date: formatDateToDDMMYYYY(new Date()), // Format to DD/MM/YYYY
+        date: formatDateToDDMMYYYY(new Date()),
         price: advertData.price,
       };
       existingAdvert.priceHistory.push(priceChange);
