@@ -1,4 +1,5 @@
-// Import Firebase modules
+const fetch = require('node-fetch');
+const cheerio = require('cheerio');
 const { initializeApp } = require('firebase/app');
 const { getDatabase, ref, set } = require('firebase/database');
 
@@ -15,39 +16,79 @@ const firebaseConfig = {
 
 // Initialize Firebase app
 const app = initializeApp(firebaseConfig);
-
-// Initialize Realtime Database
 const database = getDatabase(app);
 
-// Example of saving advert data to Firebase
+// Function to save advert data to Firebase
 async function saveAdvertData(advertId, advertData) {
   const advertRef = ref(database, `adverts/${advertId}`);
   await set(advertRef, advertData);
   console.log(`Saved advert ID ${advertId} to Firebase.`);
 }
 
-// Example scraping logic
-async function scrapePaginatedListings() {
-  console.log("Scraping paginated listings...");
-  // Example advert data
-  const advertData = {
-    title: "Example Title",
-    price: "£5,000",
-    location: "Example Location",
-    advertisedDate: new Date().toISOString(),
-  };
+// Function to scrape a single page
+async function scrapePage(url) {
+  console.log(`Fetching URL: ${url}`);
+  const response = await fetch(url);
+  const html = await response.text();
+  const $ = cheerio.load(html);
 
-  // Save the advert data to Firebase
-  await saveAdvertData("example-id", advertData);
+  const adverts = [];
+
+  $('.relative.flex').each((index, element) => {
+    const id = $(element).find('a').attr('href').split('/car/')[1];
+    const title = $(element).find('h2').text().trim();
+    const price = $(element).find('h3').text().trim();
+    const location = $(element).find('.text-xs.font-semibold.leading-4').text().trim();
+
+    if (id) {
+      adverts.push({
+        id,
+        title,
+        price,
+        location,
+        advertisedDate: new Date().toISOString(),
+      });
+    }
+  });
+
+  return adverts;
+}
+
+// Function to scrape all paginated listings
+async function scrapePaginatedListings() {
+  console.log('Scraping paginated listings...');
+  let page = 1;
+  let hasMorePages = true;
+
+  while (hasMorePages) {
+    const url = `https://www.carandclassic.com/search?listing_type_ex=advert&page=${page}&sort=latest&source=modal-sort`;
+    const adverts = await scrapePage(url);
+
+    if (adverts.length === 0) {
+      console.log(`No adverts found on page ${page}. Stopping pagination.`);
+      hasMorePages = false;
+    } else {
+      for (const advert of adverts) {
+        await saveAdvertData(advert.id, advert);
+      }
+      console.log(`Processed page ${page} with ${adverts.length} adverts.`);
+      page += 1;
+    }
+
+    // Add delay between page requests to avoid overloading the server
+    await new Promise((resolve) => setTimeout(resolve, 10000));
+  }
+
+  console.log('Scraping completed.');
 }
 
 // Main execution
 scrapePaginatedListings()
   .then(() => {
-    console.log("Scraper completed successfully.");
+    console.log('Scraper completed successfully.');
     process.exit(0);
   })
   .catch((error) => {
-    console.error("Scraper encountered an error:", error);
+    console.error('Scraper encountered an error:', error);
     process.exit(1);
   });
