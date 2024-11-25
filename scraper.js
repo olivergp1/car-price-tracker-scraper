@@ -50,24 +50,25 @@ async function scrapePage(url) {
   const seenAdverts = new Set();
 
   $('.relative.flex').each((index, element) => {
-    const href = $(element).find('a').attr('href');
-    if (!href) {
-      console.warn(`Skipping advert with missing URL`);
-      return; // Skip if URL is missing
+    const link = $(element).find('a').attr('href');
+    if (!link || typeof link !== 'string') {
+      console.warn(`Skipping advert with missing or invalid URL`);
+      return; // Skip if URL is missing or invalid
     }
 
     // Exclude adverts with "auctions" or "make-an-offer" in the URL
-    if (href.includes('auctions') || href.includes('make-an-offer')) {
-      console.warn(`Skipping advert with URL: ${href}`);
+    if (link.includes('auctions') || link.includes('make-an-offer')) {
+      console.warn(`Skipping advert with URL: ${link}`);
       return;
     }
 
-    const id = href.split('/car/')[1];
-    if (!id || seenAdverts.has(id)) {
-      console.warn(`Skipping advert with ID: ${id} (already processed or invalid)`);
+    const idMatch = link.match(/\/car\/([a-zA-Z0-9]+)/);
+    if (!idMatch || !idMatch[1] || seenAdverts.has(idMatch[1])) {
+      console.warn(`Skipping advert with ID: ${idMatch ? idMatch[1] : 'undefined'} (already processed or invalid)`);
       return; // Skip if no valid ID or already processed advert
     }
 
+    const id = idMatch[1];
     seenAdverts.add(id); // Add the advert ID to the set to avoid reprocessing
 
     const title = $(element).find('h2').text().trim();
