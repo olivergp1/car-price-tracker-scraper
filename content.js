@@ -10,49 +10,48 @@ const observerConfig = {
 };
 
 function scanForAdverts() {
-  console.log("Scanning page for relevant advert containers...");
+    console.log("Scanning page for relevant advert containers...");
 
-  // Select all containers with class "lg:grid"
-  const advertContainers = Array.from(document.querySelectorAll("div"))
-      .filter(container => container.classList.contains("lg:grid"));
+    // Select all divs with class including "grid" that contain adverts
+    const advertContainers = Array.from(document.querySelectorAll("div"))
+        .filter(container => container.className.includes("grid") && container.querySelector("article.relative.flex"));
 
-  console.log(`${advertContainers.length} relevant advert containers detected on the page.`);
+    console.log(`${advertContainers.length} relevant advert containers detected on the page.`);
 
-  advertContainers.forEach((container, index) => {
-      const advertLink = container.querySelector("a[href]");
-      if (!advertLink) {
-          console.log(`No advert link found in container #${index + 1}. Skipping.`);
-          return;
-      }
+    advertContainers.forEach((container, index) => {
+        const advertLink = container.querySelector("a[href]");
+        if (!advertLink) {
+            console.log(`No advert link found in container #${index + 1}. Skipping.`);
+            return;
+        }
 
-      const advertUrl = advertLink.href;
-      if (advertUrl.includes("auctions") || advertUrl.includes("make-an-offer")) {
-          console.log(`Skipping excluded advert: ${advertUrl}`);
-          return;
-      }
+        const advertUrl = advertLink.href;
+        if (advertUrl.includes("auctions") || advertUrl.includes("make-an-offer")) {
+            console.log(`Skipping excluded advert: ${advertUrl}`);
+            return;
+        }
 
-      const advertId = advertUrl.split("/").pop();
-      if (processedAdverts.has(advertId)) {
-          console.log(`Skipping already processed advert container #${index + 1}.`);
-          return;
-      }
+        const advertId = advertUrl.split("/").pop();
+        if (processedAdverts.has(advertId)) {
+            console.log(`Skipping already processed advert container #${index + 1}.`);
+            return;
+        }
 
-      const advertTitle = container.querySelector("h2")?.textContent?.trim() || "Unknown Title";
-      const advertPrice = container.querySelector("h3")?.textContent?.trim() || "Unknown Price";
-      const advertLocation = container.querySelector(".text-xs")?.textContent?.trim() || "Unknown Location";
+        const advertTitle = container.querySelector("h2")?.textContent?.trim() || "Unknown Title";
+        const advertPrice = container.querySelector("h3")?.textContent?.trim() || "Unknown Price";
+        const advertLocation = container.querySelector(".text-xs")?.textContent?.trim() || "Unknown Location";
 
-      console.log(
-          `Container ${index + 1}: ID=${advertId}, Title="${advertTitle}", Price="${advertPrice}", Location="${advertLocation}".`
-      );
+        console.log(
+            `Container ${index + 1}: ID=${advertId}, Title="${advertTitle}", Price="${advertPrice}", Location="${advertLocation}".`
+        );
 
-      // Add advert ID to the processed set
-      processedAdverts.add(advertId);
+        // Add advert ID to the processed set
+        processedAdverts.add(advertId);
 
-      // Fetch data from Firebase and inject UI
-      fetchAndInjectUI(advertId, container);
-  });
+        // Fetch data from Firebase and inject UI
+        fetchAndInjectUI(advertId, container);
+    });
 }
-
 
 async function fetchAndInjectUI(advertId, container) {
     try {
@@ -129,28 +128,26 @@ function injectPriceHistoryUI(container, data) {
 }
 
 function monitorDynamicChanges() {
-  // Attempt to find the parent container for search results
-  const advertListContainer = document.querySelector(".search-results-container") || document.body;
+    // Attempt to find the parent container for search results
+    const advertListContainer = document.querySelector(".search-results-container") || document.body;
 
-  if (!advertListContainer) {
-      console.error("Could not find the advert list container to observe.");
-      return;
-  }
+    if (!advertListContainer) {
+        console.error("Could not find the advert list container to observe.");
+        return;
+    }
 
-  observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-          if (mutation.addedNodes.length > 0) {
-              console.log("New adverts detected. Triggering scanForAdverts...");
-              scanForAdverts();
-          }
-      });
-  });
+    observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.addedNodes.length > 0) {
+                console.log("New adverts detected. Triggering scanForAdverts...");
+                scanForAdverts();
+            }
+        });
+    });
 
-  observer.observe(advertListContainer, observerConfig);
-  console.log("MutationObserver is now watching for dynamic changes in advert listings.");
+    observer.observe(advertListContainer, observerConfig);
+    console.log("MutationObserver is now watching for dynamic changes in advert listings.");
 }
 
-
 // Initialize advert scanning and start observing for changes
-scanForAdverts(); // Initial scan for adverts on page load
-monitorDynamicChanges(); // Start observing dynamic changes
+scanForAd
