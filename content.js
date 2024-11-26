@@ -12,10 +12,7 @@ const observerConfig = {
 function scanForAdverts() {
     console.log("Scanning page for advert containers...");
 
-    // Select all divs with class including "grid" that contain adverts
-    const advertContainers = Array.from(document.querySelectorAll("div"))
-        .filter(container => container.className.includes("grid") && container.querySelector("article.relative.flex"));
-
+    const advertContainers = document.querySelectorAll("article.relative.flex");
     console.log(`${advertContainers.length} advert containers detected on the page.`);
 
     advertContainers.forEach((container, index) => {
@@ -54,6 +51,7 @@ function scanForAdverts() {
 }
 
 async function fetchAndInjectUI(advertId, container) {
+    console.log(`Fetching data for advert ID: ${advertId}`);
     try {
         chrome.runtime.sendMessage({ type: "fetchAdvertData", advertId }, (response) => {
             if (chrome.runtime.lastError) {
@@ -65,6 +63,7 @@ async function fetchAndInjectUI(advertId, container) {
             }
 
             if (response?.data) {
+                console.log(`Data fetched for advert ID ${advertId}:`, response.data);
                 injectPriceHistoryUI(container, response.data);
             } else {
                 console.log(`No Firebase data found for advert ID ${advertId}.`);
@@ -76,6 +75,8 @@ async function fetchAndInjectUI(advertId, container) {
 }
 
 function injectPriceHistoryUI(container, data) {
+    console.log(`Injecting UI for advert container:`, container);
+
     // Helper function to format dates as DD/MM/YYYY
     function formatDate(dateString) {
         const date = new Date(dateString);
@@ -133,47 +134,44 @@ function injectPriceHistoryUI(container, data) {
 }
 
 function initializeObserver() {
-  // Locate the parent container for adverts
-  const targetNode = document.querySelector(
-      "#inertia-app > div > main > div > section:nth-child(3) > div > div.lg\\:grid-cols-4.grid.grid-cols-1.gap-x-4.gap-y-6.sm\\:grid-cols-2.md\\:grid-cols-3"
-  );
+    const targetNode = document.querySelector(
+        "#inertia-app > div > main > div > section:nth-child(3) > div > div.lg\\:grid-cols-4.grid.grid-cols-1.gap-x-4.gap-y-6.sm\\:grid-cols-2.md\\:grid-cols-3"
+    );
 
-  if (!targetNode) {
-      console.warn("Target node for adverts not found. MutationObserver not started.");
-      return;
-  }
+    if (!targetNode) {
+        console.warn("Target node for adverts not found. MutationObserver not started.");
+        return;
+    }
 
-  observer = new MutationObserver((mutations) => {
-      console.log("MutationObserver detected changes.");
-      mutations.forEach((mutation) => {
-          if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
-              console.log("Added nodes:", mutation.addedNodes);
+    observer = new MutationObserver((mutations) => {
+        console.log("MutationObserver detected changes.");
+        mutations.forEach((mutation) => {
+            if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
+                console.log("Added nodes:", mutation.addedNodes);
 
-              mutation.addedNodes.forEach((node) => {
-                  // Check for new adverts in the added node or its descendants
-                  if (
-                      node.nodeType === Node.ELEMENT_NODE &&
-                      (node.matches("article.relative.flex") ||
-                          node.querySelector("article.relative.flex"))
-                  ) {
-                      console.log("New advert detected or descendant found:", node);
-                      scanForAdverts(); // Trigger scan for adverts
-                  }
-              });
-          }
-      });
-  });
+                mutation.addedNodes.forEach((node) => {
+                    if (
+                        node.nodeType === Node.ELEMENT_NODE &&
+                        (node.matches("article.relative.flex") ||
+                            node.querySelector("article.relative.flex"))
+                    ) {
+                        console.log("New advert detected or descendant found:", node);
+                        scanForAdverts(); // Trigger scan for adverts
+                    }
+                });
+            }
+        });
+    });
 
-  observer.observe(targetNode, observerConfig);
-  console.log("MutationObserver started.");
+    observer.observe(targetNode, observerConfig);
+    console.log("MutationObserver started.");
 
-  // Fallback: Periodic rescanning to catch missed updates
-  setInterval(() => {
-      console.log("Performing fallback scan for adverts...");
-     
-
-
-
+    // Fallback: Periodic rescanning to catch missed updates
+    setInterval(() => {
+        console.log("Performing fallback scan for adverts...");
+        scanForAdverts();
+    }, 5000); // Adjust the interval as needed (e.g., 5 seconds)
+}
 
 function initializeContentScript() {
     console.log("Initializing content script...");
