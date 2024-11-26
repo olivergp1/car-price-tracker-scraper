@@ -140,7 +140,7 @@ function monitorDynamicChanges() {
         mutations.forEach((mutation) => {
             if (mutation.addedNodes.length > 0) {
                 console.log("New adverts detected. Triggering scanForAdverts...");
-                scanForAdverts();
+                scanForAdverts(); // Correct function reference
             }
         });
     });
@@ -150,4 +150,5 @@ function monitorDynamicChanges() {
 }
 
 // Initialize advert scanning and start observing for changes
-scanForAd
+scanForAdverts(); // Initial scan for adverts on page load
+monitorDynamicChanges(); // Start observing dynamic changes
