@@ -150,7 +150,7 @@ function initializeObserver() {
               console.log("Added nodes:", mutation.addedNodes);
 
               mutation.addedNodes.forEach((node) => {
-                  // Check if the added node or its descendants are valid advert containers
+                  // Check for new adverts in the added node or its descendants
                   if (
                       node.nodeType === Node.ELEMENT_NODE &&
                       (node.matches("article.relative.flex") ||
@@ -166,7 +166,12 @@ function initializeObserver() {
 
   observer.observe(targetNode, observerConfig);
   console.log("MutationObserver started.");
-}
+
+  // Fallback: Periodic rescanning to catch missed updates
+  setInterval(() => {
+      console.log("Performing fallback scan for adverts...");
+     
+
 
 
 
