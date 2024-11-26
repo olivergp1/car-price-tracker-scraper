@@ -133,34 +133,34 @@ function injectPriceHistoryUI(container, data) {
 }
 
 function initializeObserver() {
-    const targetNode = document.body;
-    if (!targetNode) {
-        console.warn("Target node not found. MutationObserver not started.");
-        return;
-    }
+  const targetNode = document.body;
+  if (!targetNode) {
+      console.warn("Target node not found. MutationObserver not started.");
+      return;
+  }
 
-    observer = new MutationObserver((mutations) => {
-        let newAdvertsFound = false;
+  observer = new MutationObserver((mutations) => {
+      console.log("MutationObserver detected changes.");
+      mutations.forEach((mutation) => {
+          console.log("Mutation type:", mutation.type);
 
-        mutations.forEach((mutation) => {
-            if (mutation.addedNodes.length > 0) {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === Node.ELEMENT_NODE && node.matches("article.relative.flex")) {
-                        newAdvertsFound = true;
-                    }
-                });
-            }
-        });
+          if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
+              console.log("Added nodes:", mutation.addedNodes);
 
-        if (newAdvertsFound) {
-            console.log("Page content changed. Re-scanning for advert containers...");
-            scanForAdverts();
-        }
-    });
+              mutation.addedNodes.forEach((node) => {
+                  if (node.nodeType === Node.ELEMENT_NODE && node.matches("article.relative.flex")) {
+                      console.log("New advert detected:", node);
+                      scanForAdverts(); // Trigger scan for adverts
+                  }
+              });
+          }
+      });
+  });
 
-    observer.observe(targetNode, observerConfig);
-    console.log("MutationObserver started.");
+  observer.observe(targetNode, observerConfig);
+  console.log("MutationObserver started.");
 }
+
 
 function initializeContentScript() {
     console.log("Initializing content script...");
