@@ -133,23 +133,28 @@ function injectPriceHistoryUI(container, data) {
 }
 
 function initializeObserver() {
-  const targetNode = document.body;
+  // Locate the most likely parent container for adverts
+  const targetNode = document.querySelector("div.grid");
+
   if (!targetNode) {
-      console.warn("Target node not found. MutationObserver not started.");
+      console.warn("Target node for adverts not found. MutationObserver not started.");
       return;
   }
 
   observer = new MutationObserver((mutations) => {
       console.log("MutationObserver detected changes.");
       mutations.forEach((mutation) => {
-          console.log("Mutation type:", mutation.type);
-
           if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
               console.log("Added nodes:", mutation.addedNodes);
 
               mutation.addedNodes.forEach((node) => {
-                  if (node.nodeType === Node.ELEMENT_NODE && node.matches("article.relative.flex")) {
-                      console.log("New advert detected:", node);
+                  // Check if the added node or its descendants are valid advert containers
+                  if (
+                      node.nodeType === Node.ELEMENT_NODE &&
+                      (node.matches("article.relative.flex") ||
+                          node.querySelector("article.relative.flex"))
+                  ) {
+                      console.log("New advert detected or descendant found:", node);
                       scanForAdverts(); // Trigger scan for adverts
                   }
               });
