@@ -12,7 +12,10 @@ const observerConfig = {
 function scanForAdverts() {
     console.log("Scanning page for advert containers...");
 
-    const advertContainers = document.querySelectorAll("article.relative.flex");
+    // Select all divs with class including "grid" that contain adverts
+    const advertContainers = Array.from(document.querySelectorAll("div"))
+        .filter(container => container.className.includes("grid") && container.querySelector("article.relative.flex"));
+
     console.log(`${advertContainers.length} advert containers detected on the page.`);
 
     advertContainers.forEach((container, index) => {
