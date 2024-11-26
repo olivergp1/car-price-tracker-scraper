@@ -133,8 +133,10 @@ function injectPriceHistoryUI(container, data) {
 }
 
 function initializeObserver() {
-  // Locate the most likely parent container for adverts
-  const targetNode = document.querySelector("div.grid");
+  // Locate the parent container for adverts
+  const targetNode = document.querySelector(
+      "#inertia-app > div > main > div > section:nth-child(3) > div > div.lg\\:grid-cols-4.grid.grid-cols-1.gap-x-4.gap-y-6.sm\\:grid-cols-2.md\\:grid-cols-3"
+  );
 
   if (!targetNode) {
       console.warn("Target node for adverts not found. MutationObserver not started.");
@@ -165,6 +167,7 @@ function initializeObserver() {
   observer.observe(targetNode, observerConfig);
   console.log("MutationObserver started.");
 }
+
 
 
 function initializeContentScript() {
