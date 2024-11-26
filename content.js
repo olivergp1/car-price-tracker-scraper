@@ -10,10 +10,13 @@ const observerConfig = {
 };
 
 function scanForAdverts() {
-    console.log("Scanning page for advert containers...");
+    console.log("Scanning page for relevant advert containers...");
 
-    const advertContainers = document.querySelectorAll("article.relative.flex");
-    console.log(`${advertContainers.length} advert containers detected on the page.`);
+    // Select all containers starting with <div class="lg:grid"
+    const advertContainers = Array.from(document.querySelectorAll("div"))
+        .filter(container => container.outerHTML.startsWith('<div class="lg:grid'));
+
+    console.log(`${advertContainers.length} relevant advert containers detected on the page.`);
 
     advertContainers.forEach((container, index) => {
         const advertLink = container.querySelector("a[href]");
@@ -120,50 +123,30 @@ function injectPriceHistoryUI(container, data) {
     uiContainer.innerHTML = historyHTML;
 
     // Append the UI container to the end of the advert container
-    const targetParent = container.querySelector("div.flex.flex-grow.flex-col.justify-between.gap-2.p-2");
-    if (targetParent) {
-        targetParent.appendChild(uiContainer);
-        console.log("Injected price history UI at the bottom of the advert content area.");
-    } else {
-        console.warn("Target parent for price history UI not found. Skipping injection.");
-    }
+    const targetParent = container.querySelector(".text-xs") || container;
+    targetParent.appendChild(uiContainer);
 }
 
-function initializeObserver() {
-    const targetNode = document.body;
-    if (!targetNode) {
-        console.warn("Target node not found. MutationObserver not started.");
+function monitorDynamicChanges() {
+    const advertListContainer = document.querySelector(".search-results-container"); // Update to the specific parent container
+    if (!advertListContainer) {
+        console.error("Could not find the advert list container to observe.");
         return;
     }
 
     observer = new MutationObserver((mutations) => {
-        let newAdvertsFound = false;
-
         mutations.forEach((mutation) => {
             if (mutation.addedNodes.length > 0) {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === Node.ELEMENT_NODE && node.matches("article.relative.flex")) {
-                        newAdvertsFound = true;
-                    }
-                });
+                console.log("New adverts detected. Triggering scanForAdverts...");
+                scanForAdverts();
             }
         });
-
-        if (newAdvertsFound) {
-            console.log("Page content changed. Re-scanning for advert containers...");
-            scanForAdverts();
-        }
     });
 
-    observer.observe(targetNode, observerConfig);
-    console.log("MutationObserver started.");
+    observer.observe(advertListContainer, observerConfig);
+    console.log("MutationObserver is now watching for dynamic changes in advert listings.");
 }
 
-function initializeContentScript() {
-    console.log("Initializing content script...");
-    scanForAdverts(); // Initial scan for adverts
-    initializeObserver(); // Start observing for changes
-}
-
-// Initialize the script
-initializeContentScript();
+// Initialize advert scanning and start observing for changes
+scanForAdverts(); // Initial scan for adverts on page load
+monitorDynamicChanges(); // Start observing dynamic changes
