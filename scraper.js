@@ -44,7 +44,7 @@ async function scrapePaginatedListings() {
       const html = await response.text();
       const $ = cheerio.load(html);
 
-      const adverts = [];
+      const adverts = new Set(); // Use a Set to ensure unique adverts
       $(".relative.flex").each((_, element) => {
         const advertURL = $(element).find("a").attr("href");
         if (advertURL && !advertURL.includes("auctions") && !advertURL.includes("make-an-offer")) {
@@ -53,18 +53,21 @@ async function scrapePaginatedListings() {
           const location = $(element).find("span.text-xs.font-semibold").text().trim();
           const title = $(element).find("h2").text().trim();
 
-          adverts.push({ id, price, location, title, url: advertURL });
+          // Use a Set to avoid duplicates
+          adverts.add(JSON.stringify({ id, price, location, title, url: advertURL }));
         }
       });
 
-      if (adverts.length === 0) {
+      const advertsArray = Array.from(adverts).map((advert) => JSON.parse(advert));
+
+      if (advertsArray.length === 0) {
         console.log(`No adverts found on page ${page}. Empty page count: ${emptyPageCount + 1}/3.`);
         emptyPageCount++;
       } else {
-        console.log(`Found ${adverts.length} adverts on page ${page}.`);
+        console.log(`Found ${advertsArray.length} adverts on page ${page}.`);
         emptyPageCount = 0;
 
-        for (const advert of adverts) {
+        for (const advert of advertsArray) {
           const advertRef = db.ref(`adverts/${advert.id}`);
           const snapshot = await advertRef.get();
 
